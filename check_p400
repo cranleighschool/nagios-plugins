@@ -1,0 +1,42 @@
+#/bin/sh!
+# --------------------------------------
+# Stefano Vicenzoni  20-01-2008
+# 
+#  in Nagios directory define checkcommands line:
+#
+#	define command{
+#		command_name    Check_array_P400
+#		command_line    $USER1$/Check_array_P400 $HOSTADDRESS$ $ARG1$
+#		}
+#  
+#  and in service
+#
+#	define service{
+#		use                     generic
+#		host_name               hostname
+#		service_description     yourdescription
+#		check_command           Check_array_P400!X
+#		}
+#                                        where X = number of logical array (0 or 1 or 2..)
+#
+#   Tested with Smart Array P400 on Windows server with service snmp active for your community. 
+#
+#
+HOST=$1
+OK=$2
+WARN=$3
+CRIT=$4
+#
+# modify next line  with your community !!
+#
+RETVAL=0
+UNIT=`/usr/bin/snmpwalk -v 1 -c CRANLEIGH -On $1 .1.3.6.1.4.1.232.3.2.3.1.1.4.2.$2 | tail -1 | awk '{print \$4}'`
+RETVAL=$?
+if [ $UNIT = 2 ]; then
+             echo "Array status OK"
+             RETVAL=0    
+    else 
+             echo "Array errors!! Check Status code $UNIT "
+             RETVAL=2     
+fi
+exit $RETVAL

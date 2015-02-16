@@ -1,0 +1,124 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+	<head>
+		<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7; IE=EmulateIE9">
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<title></title>
+<link rel="stylesheet" type="text/css" href="/web/css/jquery-ui.css"/>
+<link rel="stylesheet" type="text/css" href="/web/css/layout.css"/>
+<!--[if lt IE 9]>
+<link rel="stylesheet" type="text/css" href="/web/css/layoutIE.css">
+<script type="text/javascript" src="/web/js/dd_roundies.js"></script>
+<![endif]-->
+<script type="text/javascript" src="/web/js/json2.js"></script>
+<script type="text/javascript" src="/web/js/jquery/jquery.js"></script>
+<script type="text/javascript" src="/web/js/jquery/class.js"></script>
+<script type="text/javascript" src="/web/js/jquery/jquery-ui.js"></script>
+<script type="text/javascript" src="/web/js/raphael.js"></script>
+<script type="text/javascript" src="/web/js/common.js"></script>
+<script type="text/javascript" src="/web/js/avigilon.js"></script>
+<script language="javascript" type="text/javascript">
+var k_pageTitle = "AVIGILON 3.0MP WDR Day/Night H.264 HD Dome Camera";
+var k_userPolicy = 35;
+var k_brand = "Avigilon";
+</script>
+
+		<script type="text/javascript">
+			var g_thisNavThis = "live";
+			var g_thisSubThis = "";
+		</script>
+		<script type="text/javascript" src="/web/js/streaming.js"></script>
+		<script type="text/javascript" src="/web/js/live.js"></script>
+		<style>
+			.label										{ text-align:left; }
+			#zoomControls input, #focusControls input	{ width:35px; 		}
+			#guardTourControls							{ display: none;	}
+			#select-preset, #presetName, #guardTour 	{ width:150px; 		}
+			input										{ width:70px; 		}
+			td 											{ font-size:13px;	}
+		</style>
+	</head>
+	<body>
+		<form name="MainForm">
+			<div id="wrap">
+				<div id="header">
+<div id="titleBar">
+<table>
+<tr>
+<td class="title"><h1><script type="text/javascript">writePageTitle();</script></h1></td>
+<td class="logo"><script type="text/javascript">writeBrandImg();</script></td>
+</tr>
+</table>
+</div>
+<div id="nav">
+<table>
+<tr><script type="text/javascript">writeNavLinks();</script></tr>
+</table>
+</div>
+</div><!--header-->
+
+				<div id="body">
+					<div id="content-full">
+						<div>
+							<img id="liveImage" width="730" src=""></img>
+						</div>
+						<p id="div-stream-warning" class="with-no-bottom-margin" style="display:none"><em id="stream-warning" class="warning"></em></p>
+					</div>
+					<div id="divPtz" style="display:none;width:750px;">
+						<div id="divider"></div>
+						<table class="cell-padding-v cell-padding-h">
+							<tr>
+								<td valign=top>
+									<table class="tiny-cell-padding-h">
+										<tr id="zoomControls">
+											<td class="label">Zoom:</td>
+											<td colspan="6"><div id="zoomSlider" /></td>
+											<td>&nbsp&nbsp<img src="/web/img/spinner.gif" id="zoomSpinner" style="visibility:hidden"></img></td>
+										</tr>
+										<tr><td colspan="9" style="line-height:6px">&nbsp;</td></tr>
+										<tr id="focusControls">
+											<td class="label">Focus:</td>
+											<td align=left>Near</td>
+											<td><input type="button" action="focus" amount="-20"  value="<<" disabled></input></td>
+											<td><input type="button" action="focus" amount="-4"   value="<"  disabled></input></td>
+											<td><input type="button" action="focus" amount="4"  value=">"  disabled></input></td>
+											<td><input type="button" action="focus" amount="20" value=">>" disabled></input></td>
+											<td align=left width=30>Far</td>
+											<td>&nbsp&nbsp<img src="/web/img/spinner.gif" id="focusSpinner" style="visibility:hidden"></img></td>
+										</tr>
+									</table>
+								</td>
+								<td class="left-border"></td>
+								<td valign=top>
+									<table class="tiny-cell-padding-h" id="presetControls">
+										<tr id="guardTourControls">
+											<td class="label">Tours:</td>
+											<td><select id="guardTour"></select></td>
+											<td><input type="button" id="startTour" value="Start" /></td>
+											<td><input type="button" id="stopTour" value="Stop" /></td>
+										</tr>
+										<tr>
+											<td class="label">Presets:</td>
+											<td><select name="select-preset" id="select-preset" disabled="disabled"></select></td>
+											<td><input type="button" name="btn-presetGoto" id="btn-presetGoto" value="Go" disabled="disabled"></input></td>
+											<td><input type="button" name="btn-presetRemove" id="btn-presetRemove" value="Remove" disabled="disabled"></input></td>
+										</tr>
+										<tr>
+											<td class="label">Add Preset:</td>
+											<td><input type="text" id="presetName" name="input-presetName" maxlength="64" class="appliable" disabled="disabled"></input></td>
+											<td><input type="button" name="btn-presetAdd" id="btn-presetAdd" value="Add" disabled="disabled"></input></td>
+											<td></td>
+										</tr>
+									</table>
+								</td>
+							</tr>
+						</table>
+						<div id="divider"></div>
+					</div>
+					<div style="padding-left:10px"><div class="statusMessage"></div></div>
+				</div><!--body-->
+				<div id="footer"></div>
+			</div><!--wrap-->
+		</form>
+	</body>
+</html>
