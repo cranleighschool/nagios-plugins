@@ -7,7 +7,7 @@ parser.add_argument("--message",help="Message to send")
 parser.add_argument("--type",help="Problem or Recovery")
 params = parser.parse_args()
 
-json_dict = { 'title': 'Nagios Host (INT)', 'message': params.message,'picture': 'https://cdn1.iconfinder.com/data/icons/energy-power/512/flame_fire_energy_fire_hazard-128.png' }
+json_dict = { 'title': 'Nagios Host (INT)', 'message': params.message,'picture': 'http://www.cranleigh.org/external_resources/fire.png' }
 
 # convert json_dict to JSON
 json_data = json.dumps(json_dict)

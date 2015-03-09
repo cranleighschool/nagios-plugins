@@ -57,7 +57,7 @@ use Date::Format;
 
 my $user = '';
 my $password = '';
-my $maxAge = 24;
+my $maxAge = 36;
 
 GetOptions('user=s' => \$user, 'password=s' => \$password, 'maxAge=n' => \$maxAge);
 
