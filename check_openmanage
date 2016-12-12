@@ -5,7 +5,7 @@
 # Monitor Dell server hardware status using Dell OpenManage Server
 # Administrator, either locally via NRPE, or remotely via SNMP.
 #
-# Copyright (C) 2008-2013 Trond H. Amundsen
+# Copyright (C) 2008-2014 Trond H. Amundsen
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ use vars qw( $NAME $VERSION $AUTHOR $CONTACT $E_OK $E_WARNING $E_CRITICAL
 	     $snmp_session $snmp_error $omreport $globalstatus $global
 	     $linebreak $omopt_chassis $omopt_system $blade
 	     $exit_code $snmp
-	     %check %opt %reverse_exitcode %status2nagios
+	     %check %opt %reverse_exitcode %status2nagios %country
 	     %snmp_status %snmp_probestatus %probestatus2nagios %sysinfo
 	     %blacklist %nagios_alert_count %count %snmp_enclosure %snmp_controller
 	     @perl_warnings @controllers @enclosures @perfdata
@@ -49,7 +49,7 @@ $SIG{__WARN__} = sub { push @perl_warnings, [@_]; };
 
 # Version and similar info
 $NAME    = 'check_openmanage';
-$VERSION = '3.7.9';
+$VERSION = '3.7.12';
 $AUTHOR  = 'Trond H. Amundsen';
 $CONTACT = 't.h.amundsen@usit.uio.no';
 
@@ -108,6 +108,7 @@ CHECK CONTROL AND BLACKLISTING:
    --only               Only check a certain component or alert type
    --check              Fine-tune which components are checked
    --no-storage         Don't check storage
+   --vdisk-critical     Make any alerts on virtual disks critical
 
 For more information and advanced options, see the manual page or URL:
   http://folk.uio.no/trondham/software/check_openmanage.html
@@ -116,7 +117,7 @@ END_HELP
 # Version and license text
 $LICENSE = <<"END_LICENSE";
 $NAME $VERSION
-Copyright (C) 2008-2013 $AUTHOR
+Copyright (C) 2008-2014 $AUTHOR
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
@@ -167,6 +168,7 @@ END_LICENSE
 	 'privprotocol'      => undef,    # SMNP v3
          'use_get_table'     => 0,        # hack for SNMPv3 on Windows with net-snmp
 	 'hide_servicetag'   => 0,        # hidden servicetag
+	 'vdisk_critical'    => 0,        # make vdisk alerts critical
        );
 
 # Get options
@@ -212,6 +214,7 @@ GetOptions('b|blacklist=s'      => \@{ $opt{blacklist} },
 	   'privprotocol=s'     => \$opt{privprotocol},
            'use-get_table'      => \$opt{use_get_table},
 	   'hide-servicetag'    => \$opt{hide_servicetag},
+	   'vdisk-critical'     => \$opt{vdisk_critical},
 	  ) or do { print $USAGE; exit $E_UNKNOWN };
 
 # If user requested help
@@ -413,6 +416,42 @@ $globalstatus   = $E_OK;  # default global health status is "OK"
      'rac_fw'   => 'N/A',  # RAC firmware
     );
 
+# Country and language list for URL generation
+%country
+  = (
+     # EMEA
+     at => { c => 'at', l => 'de' },  # Austria
+     be => { c => 'be', l => 'nl' },  # Belgium
+     cz => { c => 'cz', l => 'cs' },  # Czech Republic
+     de => { c => 'de', l => 'de' },  # Germany
+     dk => { c => 'dk', l => 'da' },  # Denmark
+     es => { c => 'es', l => 'es' },  # Spain
+     fi => { c => 'fi', l => 'fi' },  # Finland
+     fr => { c => 'fr', l => 'fr' },  # France
+     gr => { c => 'gr', l => 'el' },  # Greece
+     it => { c => 'it', l => 'it' },  # Italy
+     il => { c => 'il', l => 'en' },  # Israel
+     me => { c => 'me', l => 'en' },  # Middle East
+     no => { c => 'no', l => 'no' },  # Norway
+     nl => { c => 'nl', l => 'nl' },  # The Netherlands
+     pl => { c => 'pl', l => 'pl' },  # Poland
+     pt => { c => 'pt', l => 'pt' },  # Portugal
+     ru => { c => 'ru', l => 'ru' },  # Russia
+     se => { c => 'se', l => 'sv' },  # Sweden
+     uk => { c => 'uk', l => 'en' },  # United Kingdom
+     za => { c => 'za', l => 'en' },  # South Africa
+     # America
+     br => { c => 'br', l => 'pt' },  # Brazil
+     ca => { c => 'ca', l => 'en' },  # Canada
+     mx => { c => 'mx', l => 'es' },  # Mexico
+     us => { c => 'us', l => 'en' },  # USA
+     # Asia/Pacific
+     au => { c => 'au', l => 'en' },  # Australia
+     cn => { c => 'cn', l => 'zh' },  # China
+     in => { c => 'in', l => 'en' },  # India
+     jp => { c => 'jp', l => 'ja' },  # Japan
+    );
+
 # Adjust which checks to perform
 adjust_checks() if defined $opt{check};
 
@@ -508,6 +547,7 @@ sub parse_configfile {
 	  'snmp_timeout'    => 'snmp_timeout',
 	  'blacklist'       => 'blacklist',
 	  'legacy_perfdata' => 'legacy_performance_data',
+          'vdisk_critical'  => 'vdisk_critical',
 	);
 
     # Load the perl module
@@ -800,6 +840,7 @@ sub parse_configfile {
 	configfile_set_boolean($sect, 'tcp');
 	configfile_set_boolean($sect, 'legacy_perfdata');
 	configfile_set_boolean($sect, 'hide_servicetag');
+	configfile_set_boolean($sect, 'vdisk_critical');
 	configfile_set_snmp_version($sect);
 	configfile_set_snmp_community($sect);
 	configfile_set_snmp_port($sect);
@@ -1420,15 +1461,26 @@ sub map_item {
 # PowerEdge server
 sub documentation_url {
     my $model = shift;
+    my $rev = shift;
 
-    # create model short form, e.g. "r710"
-    $model =~ s{\A PowerEdge \s (.+?) \z}{lc($1)}exms;
+    # Special case: R210 II
+    if ($model eq 'R210' and $rev eq 'II') {
+	$model = 'r210-2';
+    }
 
-    # special case for blades (e.g. M600, M710), they have common
-    # documentation
-    $model =~ s{\A m\d+ \z}{m}xms;
+    # create model name used in URLs, e.g. "poweredge-r710"
+    $model = lc($model);
+    $model =~ s{\s}{-}xms;
 
-    return 'http://support.dell.com/support/edocs/systems/pe' . $model . '/';
+    if (exists $country{$opt{htmlinfo}}) {
+	return sprintf 'http://www.dell.com/support/troubleshooting/%s/%s/19/Product/%s#ui-tabs-4',
+	  $country{$opt{htmlinfo}}->{c}, $country{$opt{htmlinfo}}->{l}, $model;
+    }
+    else {
+	return sprintf 'http://www.dell.com/support/troubleshooting/us/en/19/Product/%s#ui-tabs-4',
+	  $model;
+    }
+    return;
 }
 
 # Return the URL for warranty information for a server with a given
@@ -1437,41 +1489,6 @@ sub warranty_url {
     my $tag       = shift;
     my $url_start = 'http://www.dell.com/support/troubleshooting';
     my $url_end   = 'Index?t=warranty&servicetag';
-
-    my %country
-      = (
-	 # EMEA
-	 at => { c => 'at', l => 'de' },  # Austria
-	 be => { c => 'be', l => 'nl' },  # Belgium
-	 cz => { c => 'cz', l => 'cs' },  # Czech Republic
-	 de => { c => 'de', l => 'de' },  # Germany
-	 dk => { c => 'dk', l => 'da' },  # Denmark
-	 es => { c => 'es', l => 'es' },  # Spain
-	 fi => { c => 'fi', l => 'fi' },  # Finland
-	 fr => { c => 'fr', l => 'fr' },  # France
-	 gr => { c => 'gr', l => 'el' },  # Greece
-	 it => { c => 'it', l => 'it' },  # Italy
-	 il => { c => 'il', l => 'en' },  # Israel
-	 me => { c => 'me', l => 'en' },  # Middle East
-	 no => { c => 'no', l => 'no' },  # Norway
-	 nl => { c => 'nl', l => 'nl' },  # The Netherlands
-	 pl => { c => 'pl', l => 'pl' },  # Poland
-	 pt => { c => 'pt', l => 'pt' },  # Portugal
-	 ru => { c => 'ru', l => 'ru' },  # Russia
-	 se => { c => 'se', l => 'sv' },  # Sweden
-	 uk => { c => 'uk', l => 'en' },  # United Kingdom
-	 za => { c => 'za', l => 'en' },  # South Africa
-	 # America
-	 br => { c => 'br', l => 'pt' },  # Brazil
-	 ca => { c => 'ca', l => 'en' },  # Canada
-	 mx => { c => 'mx', l => 'es' },  # Mexico
-	 us => { c => 'us', l => 'en' },  # USA
-	 # Asia/Pacific
-	 au => { c => 'au', l => 'en' },  # Australia
-	 cn => { c => 'cn', l => 'zh' },  # China
-	 in => { c => 'in', l => 'en' },  # India
-	 jp => { c => 'jp', l => 'ja' },  # Japan
-	);
 
     if (exists $country{$opt{htmlinfo}}) {
 	return sprintf '%s/%s/%s/nodhs1/%s=%s',
@@ -1991,8 +2008,9 @@ sub check_physical_disks {
 	# Special case: Uncertified disk
 	if (!$cert) {
 	    # Functional non Dell disks get a Non-Critical status
-	    if (($state eq 'Online' or $state eq 'Ready')
-		and $status eq 'Non-Critical' and blacklisted('pdisk_cert', $nexus)) {
+	    if (($state eq 'Online' or $state eq 'Ready' or $state eq 'Non-RAID')
+		and $status eq 'Non-Critical' and not $fpred
+		and blacklisted('pdisk_cert', $nexus)) {
 		--$stack;
 	    }
 	    else {
@@ -2002,6 +2020,11 @@ sub check_physical_disks {
 	# Special case: Foreign disk
 	if ($state eq 'Foreign' and blacklisted('pdisk_foreign', $nexus)) {
 	    --$stack;
+	}
+
+	# Set failed disk as critical (override OMSA)
+        if ($state eq 'Failed') {
+	    $stack = 2;
 	}
 
 	# Create combined status and state
@@ -2164,13 +2187,18 @@ sub check_virtual_disks {
 	if ($state eq 'Regenerating') {
 	    my $msg = sprintf q{Logical Drive '%s' [%s, %s] is %s%s},
 	      $dev, $layout, $size, $state, $progr;
-	    report('storage', $msg, $E_WARNING, $nexus);
+	    my $lvl = $opt{vdisk_critical} ? $E_CRITICAL : $E_WARNING;
+	    report('storage', $msg, $lvl, $nexus);
 	}
 	# Default
 	else {
 	    my $msg = sprintf q{Logical Drive '%s' [%s, %s] is %s},
 	      $dev, $layout, $size, $state;
-	    report('storage', $msg, $status2nagios{$status}, $nexus);
+	    my $lvl = $status2nagios{$status};
+	    if ($opt{vdisk_critical} && $lvl != $E_OK) {
+		$lvl = $E_CRITICAL;
+	    }
+	    report('storage', $msg, $lvl, $nexus);
 	}
     }
     return;
@@ -5243,6 +5271,7 @@ if ($exit_code == $E_OK && defined $opt{only} && $opt{only} !~ m{\A critical|war
 	  'esmlog'      => "OK - ESM Log content: $count{esm}{Ok} ok, $count{esm}{'Non-Critical'} warning and $count{esm}{Critical} critical",
 	  'esmhealth'   => "ESM LOG OK - less than 80% used",
           'sdcard'      => "SD CARDS OK - $count{sd} SD cards installed",
+          'servicetag'  => sprintf 'ServiceTag OK: %s', $opt{hide_servicetag} ? 'XXXXXXX' : $sysinfo{serial},
 	);
 
     print $okmsg{$opt{only}};
@@ -5260,12 +5289,12 @@ if ($exit_code == $E_OK && defined $opt{only} && $opt{only} !~ m{\A critical|war
 elsif ($exit_code == $E_OK && !$opt{debug}) {
     if (defined $opt{htmlinfo} and !$opt{hide_servicetag}) {
 	printf q{OK - System: '<a target="_blank" href="%s">%s%s</a>', SN: '<a target="_blank" href="%s">%s</a>'},
-	  documentation_url($sysinfo{model}), $sysinfo{model}, $sysinfo{rev},
+	  documentation_url($sysinfo{model},$sysinfo{rev}), $sysinfo{model}, $sysinfo{rev},
 	    warranty_url($sysinfo{serial}), $sysinfo{serial};
     }
     elsif (defined $opt{htmlinfo} and $opt{hide_servicetag}) {
 	printf q{OK - System: '<a target="_blank" href="%s">%s%s</a>', SN: '%s'},
-	  documentation_url($sysinfo{model}), $sysinfo{model}, $sysinfo{rev},
+	  documentation_url($sysinfo{model},$sysinfo{rev}), $sysinfo{model}, $sysinfo{rev},
 	    $sysinfo{serial};
     }
     else {

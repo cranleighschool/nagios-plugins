@@ -8,7 +8,7 @@
 
 PROGNAME=`basename $0`
 PROGPATH=`echo $0 | sed -e 's,[\\/][^\\/][^\\/]*$,,'`
-REVISION="1.4.16"
+REVISION="2.0.3"
 
 . $PROGPATH/utils.sh
 
@@ -18,6 +18,7 @@ print_usage() {
   echo "  $PROGNAME --tns <Oracle Sid or Hostname/IP address>"
   echo "  $PROGNAME --db <ORACLE_SID>"
   echo "  $PROGNAME --login <ORACLE_SID>"
+  echo "  $PROGNAME --connect <ORACLE_SID>"
   echo "  $PROGNAME --cache <ORACLE_SID> <USER> <PASS> <CRITICAL> <WARNING>"
   echo "  $PROGNAME --tablespace <ORACLE_SID> <USER> <PASS> <TABLESPACE> <CRITICAL> <WARNING>"
   echo "  $PROGNAME --oranames <Hostname>"
@@ -39,6 +40,8 @@ print_help() {
   echo "   filesystem for sgadefORACLE_SID.dbf"
   echo "--login SID"
   echo "   Attempt a dummy login and alert if not ORA-01017: invalid username/password"
+  echo "--connect SID"
+  echo "   Attempt a login and alert if an ORA- error is returned"
   echo "--cache"
   echo "   Check local database for library and buffer cache hit ratios"
   echo "       --->  Requires Oracle user/password and SID specified."
@@ -133,7 +136,7 @@ case "$cmd" in
     tnschk=` tnsping $2`
     tnschk2=` echo  $tnschk | grep -c OK`
     if [ ${tnschk2} -eq 1 ] ; then 
-	tnschk3=` echo $tnschk | sed -e 's/.*(//' -e 's/).*//'`
+	tnschk3=${tnschk##*(}; tnschk3=${tnschk3%)*}
 	echo "OK - reply time ${tnschk3} from $2"
 	exit $STATE_OK
     else
@@ -160,7 +163,7 @@ case "$cmd" in
     }'
     ;;
 --db)
-    pmonchk=`ps -ef | grep -v grep | grep -c "ora_pmon_${2}$"`
+    pmonchk=`ps -ef | grep -v grep | grep -E -c "(asm|ora)_pmon_${2}$"`
     if [ ${pmonchk} -ge 1 ] ; then
 	echo "${2} OK - ${pmonchk} PMON process(es) running"
 	exit $STATE_OK
@@ -184,6 +187,18 @@ case "$cmd" in
     else
 	loginchk3=` echo "$loginchk" | grep "ORA-" | head -1`
 	echo "CRITICAL - $loginchk3"
+	exit $STATE_CRITICAL
+    fi
+    ;;
+--connect)
+    connectchk=`sqlplus $2 < /dev/null`
+    connectchk2=` echo  $connectchk | grep -c ORA-`
+    if [ ${connectchk2} -eq 0 ] ; then
+	echo "OK - login successful"
+	exit $STATE_OK
+    else
+	connectchk3=` echo "$connectchk" | grep "ORA-" | head -1`
+	echo "CRITICAL - $connectchk3"
 	exit $STATE_CRITICAL
     fi
     ;;

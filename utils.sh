@@ -6,24 +6,27 @@ STATE_CRITICAL=2
 STATE_UNKNOWN=3
 STATE_DEPENDENT=4
 
-if test -x /usr/bin/printf; then
-	ECHO=/usr/bin/printf
-else
-	ECHO=echo
-fi
-
 print_revision() {
-	echo "$1 v$2 (nagios-plugins 1.4.16)"
-	$ECHO "The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n" | sed -e 's/\n/ /g'
+	echo "$1 v$2 (nagios-plugins 2.0.3)"
+	printf '%b' "The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n"
 }
 
 support() {
-	$ECHO "Send email to nagios-users@lists.sourceforge.net if you have questions\nregarding use of this software. To submit patches or suggest improvements,\nsend email to nagiosplug-devel@lists.sourceforge.net.\nPlease include version information with all correspondence (when possible,\nuse output from the --version option of the plugin itself).\n" | sed -e 's/\n/ /g'
+	printf '%b' "Send email to help@nagios-plugins.org if you have questions regarding use\nof this software. To submit patches or suggest improvements, send email to\ndevel@nagios-plugins.org. Please include version information with all\ncorrespondence (when possible, use output from the --version option of the\nplugin itself).\n"
 }
 
 #
 # check_range takes a value and a range string, returning successfully if an
-# alert should be raised based on the range.
+# alert should be raised based on the range.  Range values are inclusive.
+# Values may be integers or floats.
+#
+# Example usage:
+#
+# Generating an exit code of 1:
+# check_range 5 2:8
+#
+# Generating an exit code of 0:
+# check_range 1 2:8
 #
 check_range() {
 	local v range yes no err decimal start end cmp match

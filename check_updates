@@ -3,6 +3,8 @@
 eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
     if 0; # not running under some shell
 
+# nagios: -epn
+
 package main;
 
 # check_updates is a Nagios plugin to check if RedHat or Fedora system
@@ -10,7 +12,7 @@ package main;
 #
 # See  the INSTALL file for installation instructions
 #
-# Copyright (c) 2007-2010, Matteo Corti
+# Copyright (c) 2007-2014, Matteo Corti
 #
 # This module is free software; you can redistribute it and/or modify it
 # under the terms of GNU general public license (gpl) version 3,
@@ -21,17 +23,17 @@ package main;
 # enable substitution with:
 #   $ svn propset svn:keywords "Id Revision HeadURL Source Date"
 #
-#   $Id: check_updates 1313 2012-09-03 06:14:09Z corti $
-#   $Revision: 1313 $
+#   $Id: check_updates 1400 2014-12-28 15:26:51Z corti $
+#   $Revision: 1400 $
 #   $HeadURL: https://svn.id.ethz.ch/nagios_plugins/check_updates/check_updates $
-#   $Date: 2012-09-03 08:14:09 +0200 (Mon, 03 Sep 2012) $
+#   $Date: 2014-12-28 16:26:51 +0100 (Sun, 28 Dec 2014) $
 
 use 5.00800;
 
 use strict;
 use warnings;
 
-our $VERSION = '1.6.1';
+our $VERSION = '1.6.9';
 
 use Carp;
 use English qw(-no_match_vars);
@@ -39,8 +41,6 @@ use Nagios::Plugin::Getopt;
 use Nagios::Plugin::Threshold;
 use Nagios::Plugin;
 use POSIX qw(uname);
-use Sort::Versions;
-
 use Readonly;
 
 Readonly our $EXIT_UNKNOWN                 => 3;
@@ -62,10 +62,11 @@ use vars qw(
   $help
   $options
   $plugin
-  $threshold
   $security_plugin
-  $wrong_kernel
   $status
+  $threshold
+  $wrong_kernel
+  $yum_executable
   @status_lines
 );
 ## use critic
@@ -73,6 +74,11 @@ use vars qw(
 # the script is declared as a package so that it can be unit tested
 # but it should not be used as a module
 if ( !caller ) {
+
+    # set the yum executable (the value can be overridden in the
+    # tests to a mock
+    $yum_executable = 'yum';
+
     run();
 }
 
@@ -160,7 +166,9 @@ sub verbose {
         $level = 0;
     }
 
-    if ( $level < $options->verbose ) {
+    # we check if options is defined as the it could be undefined if
+    # running from a unit test
+    if ( defined $options && $level < $options->verbose ) {
         #<<<
         print $message; ## no critic (RequireCheckedSyscalls)
         #>>>
@@ -170,6 +178,75 @@ sub verbose {
 
 }
 
+##############################################################################
+# Usage     : versioncmp
+# Purpose   : Sort revision-like numbers
+# Returns   : -1, 0, or 1 depending on whether the left argument is less than,
+#             equal to, or greater than the right argument.
+# Arguments : Globally defined $a and $b as the versions to compare
+# Throws    : n/a
+# Comments  : Included (and adapted) from Sort::Version  to remove the
+#             dependency on Sort::Version which is not available per default
+#             on RH systems
+# See also  : Sort::Version on CPAN
+sub versioncmp {
+
+    my @A = ( $a =~ /([-.]|\d+|[^-.\d]+)/gxms );
+    my @B = ( $b =~ /([-.]|\d+|[^-.\d]+)/gxms );
+
+    my ( $A, $B );
+    while ( @A and @B ) {
+
+        $A = shift @A;
+        $B = shift @B;
+
+        ## no critic (ProhibitCascadingIfElse)
+        if ( $A eq q{-} and $B eq q{-} ) {
+            next;
+        }
+        elsif ( $A eq q{-} ) {
+            return -1;    ## no critic (ProhibitMagicNumbers)
+        }
+        elsif ( $B eq q{-} ) {
+            return 1;
+        }
+        elsif ( $A eq q{.} and $B eq q{.} ) {
+            next;
+        }
+        elsif ( $A eq q{.} ) {
+            return -1;    ## no critic (ProhibitMagicNumbers)
+        }
+        elsif ( $B eq q{.} ) {
+            return 1;
+        }
+        elsif ( $A =~ /^\d+$/xms and $B =~ /^\d+$/xms ) {
+            if ( $A =~ /^0/xms || $B =~ /^0/xms ) {
+                return $A cmp $B if $A cmp $B;
+            }
+            else {
+                return $A <=> $B if $A <=> $B;
+            }
+        }
+        else {
+            $A = uc $A;
+            $B = uc $B;
+            return $A cmp $B if $A cmp $B;
+        }
+        ## use critic (ProhibitCascadingIfElse)
+
+    }
+    return @A <=> @B;
+}
+
+##############################################################################
+# Usage     : $kernel_version = clean_kernel_version( $kernel_version )
+# Purpose   : removes everything but the version number from the kernel
+#             version (e.g., PAE, xen, ...)
+# Returns   : kernel version
+# Arguments : kernel_version : output of uname
+# Throws    : n/a
+# Comments  : n/a
+# See also  : n/a
 sub clean_kernel_version {
 
     my $kernel = shift;
@@ -181,6 +258,9 @@ sub clean_kernel_version {
 
     # remove Xen
     $kernel =~ s/xen-//imxs;
+
+    # remove openvz
+    $kernel =~ s/o?vzkernel-//imxs;
 
     # remove architecture
 
@@ -196,6 +276,9 @@ sub clean_kernel_version {
     $kernel =~ s/[.]el\d+.*//imxs;
     $kernel =~ s/[.]fc\d+.*//imxs;
 
+    # remove UEK
+    $kernel =~ s/uek-//imxs;
+
     return $kernel;
 
 }
@@ -209,6 +292,12 @@ sub clean_kernel_version {
 # Comments  : n/a
 # See also  : n/a
 sub check_running_kernel {
+
+    # return if running in openvz client: /proc/vz is always present but
+    # /proc/bc only exists on node, but not inside container.
+    if ( -d '/proc/vz' && !( -d '/proc/bc' ) ) {
+        return;
+    }
 
     if ( !$bootcheck ) {
         return;
@@ -230,8 +319,13 @@ sub check_running_kernel {
 
     my @versions;
 
-    for
-      my $rpm ( ( "$package", "$package-smp", "$package-PAE", "$package-xen" ) )
+    for my $rpm (
+        (
+            "$package",     "$package-smp", "$package-PAE", "$package-xen",
+            "$package-uek", 'ovzkernel',    'vzkernel'
+        )
+      )
+
     {
 
         my $output;
@@ -244,7 +338,7 @@ sub check_running_kernel {
         # there could be multiple versions of the same package installed
         my @rpm_versions;
         while (<$output>) {
-            chomp $_;
+            chomp;
             push @rpm_versions, $_;
         }
 
@@ -269,7 +363,7 @@ sub check_running_kernel {
     for (@versions) {
 
         # strip package name
-        $_ =~ s/^$package-//mxs;
+        s/^$package-//mxs;
         $_ = clean_kernel_version($_);
 
     }
@@ -306,7 +400,7 @@ sub check_running_kernel {
 # Returns   : the list of updates
 # Arguments : string with the command line arguments
 # Throws    : n/a
-# Comments  : sets $security_plugin to true if the plugin is enabled
+# Comments  : n/a
 # See also  : n/a
 sub run_yum {
 
@@ -316,7 +410,9 @@ sub run_yum {
     my $OUTPUT_HANDLER;
     my @updates;
 
-    my $command = "yum $arguments check-update";
+    my $command = "$yum_executable $arguments check-update";
+
+    verbose qq{Running "$command"\n}, 1;
 
     #<<<
     my $pid = open $OUTPUT_HANDLER, q{-|}, $command ## no critic (RequireBriefOpen)
@@ -333,17 +429,6 @@ sub run_yum {
         if ( !$line ) {
             $blank_line = 1;
             next;
-        }
-
-        if ( $line =~ m{^Loaded[ ]plugins:.*[ ]security.*}mxs ) {
-
-            if ( !$security_plugin ) {
-
-             # we do not want the same output if we are running the second check
-                verbose "Security plugin installed\n";
-            }
-            $security_plugin = 1;
-
         }
 
         if ($blank_line) {
@@ -384,18 +469,58 @@ sub run_yum {
 }
 
 ##############################################################################
+# Usage     : check_security_option
+# Purpose   : checks if you supports --security (in older versions required
+#             a plugin)
+# Returns   : 1 if --security is supported, undef otherwise
+# Arguments : n/a
+# Throws    : n/a
+# Comments  : n/a
+# See also  : n/a
+sub check_security_option {
+
+    my $OUTPUT_HANDLER;
+
+    my $pid = open $OUTPUT_HANDLER, q{-|}, 'yum --help | grep -q -- --security'
+      or
+      exit_with_error( UNKNOWN, "Cannot check for security option: $OS_ERROR" );
+
+    if ( !( close $OUTPUT_HANDLER ) && ( $OS_ERROR != 0 ) ) {
+
+        # close to a piped open return false if the command with non-zero
+        # status. In this case $! is set to 0
+        exit_with_error( UNKNOWN,
+            "Error while closing pipe to rpm: $OS_ERROR\n" );
+
+    }
+
+    if ( $CHILD_ERROR == 0 ) {
+        verbose "Security plugin installed\n";
+        $security_plugin = 1;
+    }
+
+    return;
+
+}
+
+##############################################################################
 # Usage     : check_yum();
 # Purpose   : checks a yum based system for updates
 # Returns   : n/a
-# Arguments : n/a
+# Arguments : string with the command line arguments
 # Throws    : n/a
 # Comments  : n/a
 # See also  : n/a
 ## no critic (ProhibitExcessComplexity)
 sub check_yum {
 
+    my $arguments = shift;
+
     my $message;
-    my @outdated = run_yum(q{});
+
+    check_security_option();
+
+    my @outdated = run_yum($arguments);
     my @security_updates;
 
     $plugin->add_perfdata(
@@ -443,7 +568,7 @@ sub check_yum {
                 $status = OK;
             }
 
-            @security_updates = run_yum('--security');
+            @security_updates = run_yum( '--security ' . $arguments );
 
             if ( @security_updates > 0 ) {
 
@@ -504,12 +629,14 @@ sub check_yum {
         $message = 'no updates available';
     }
 
-    $plugin->add_perfdata(
-        label     => 'security_updates',
-        value     => scalar @security_updates,
-        uom       => q{},
-        threshold => $threshold,
-    );
+    if ($security_plugin) {
+        $plugin->add_perfdata(
+            label     => 'security_updates',
+            value     => scalar @security_updates,
+            uom       => q{},
+            threshold => $threshold,
+        );
+    }
 
     if ($exit_message) {
         $exit_message .= q{, } . $message;
@@ -680,7 +807,8 @@ sub get_updater {
         || $name =~ /CentOS/mxs
         || $name =~ /PUIAS/mxs
         || $name =~ /Scientific[ ]Linux/mxs
-        || $name =~ /Red[ ]Hat.*[ ][56]/mxs
+        || $name =~ /Red[ ]Hat.*[ ][567]/mxs
+        || $name =~ /Oracle/mxs
         || $name =~ /Amazon/mxs )
     {
         return 'yum';
@@ -755,6 +883,12 @@ sub run {
         help => 'Ignores non-security updates',
     );
 
+    $options->arg(
+        spec => 'yum-arguments|a=s',
+        help => 'specific Yum arguments as STRING',
+
+    );
+
     $options->getopts();
 
     ###############
@@ -786,6 +920,14 @@ sub run {
     }
 
     #########
+    # Arguments
+
+    my $arguments = q{};
+    if ( $options->get('yum-arguments') ) {
+        $arguments = $options->get('yum-arguments');
+    }
+
+    #########
     # Timeout
 
     alarm $options->timeout;
@@ -800,9 +942,9 @@ sub run {
         my $updater = get_updater($name);
 
         if ( $updater eq 'yum' ) {
-            verbose "Using yum\n";
+            verbose "Using Yum\n";
             check_running_kernel();
-            check_yum();
+            check_yum($arguments);
         }
         elsif ( $updater eq 'up2date' ) {
             verbose "Using up2date\n";

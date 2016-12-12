@@ -29,7 +29,7 @@ GetOptions
 	 "H=s" => \$opt_H, "hostname=s" => \$opt_H);
 
 if ($opt_V) {
-	print_revision($PROGNAME,'1.4.16'); #'
+	print_revision($PROGNAME,'2.0.3'); #'
 	exit $ERRORS{'OK'};
 }
 
@@ -111,7 +111,7 @@ sub print_usage () {
 }
 
 sub print_help () {
-	print_revision($PROGNAME,'1.4.16');
+	print_revision($PROGNAME,'2.0.3');
 	print "Copyright (c) 2000 Jeffery Blank/Karl DeBisschop\n";
 	print "\n";
 	print_usage();

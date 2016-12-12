@@ -1,0 +1,54 @@
+#!/bin/bash
+# Author Stefan Nonchev
+# Nagios check script for esx to check existence of orphaned snapshots
+# The script should work with any ESXi 5.x
+# Installation notes:
+# On your nagios server execute:
+#
+# #sudo nagios
+# #ssh-keygen
+# copy the public certificate into /etc/ssh/keys-root/authorized_keys on each ESXi host that will be monitored
+
+print_usage() {
+        echo ""
+        echo "Usage: $0 [esxi_hostname] [username] [password]"
+        echo ""
+        exit 3
+}
+
+if [ "$#" -ne "3" ]; then
+        print_usage
+fi
+
+IFS="
+"
+
+#vmnames=""
+# Getting full path to .vmx files from vmInventory.xml
+vmx=(`vmware-cmd -H $1 -U $2 -P $3 -l | sed 's: :\\ :g' | sed "s:&apos;:':g"`);
+for vm in "${vmx[@]}"; do
+    hassnapshot=(`vmware-cmd -H $1 -U $2 -P $3 $vm hassnapshot | awk '{print $4}'`)
+    #add quotes to the vm string for proper argument pass
+    vm=(`echo $vm | sed 's/.*/"&"/'`);
+
+    if [ $hassnapshot -eq 1 ] ; then
+        vmdk=(`ssh root@$1 grep vmdk $vm | head -1 | cut -d \" -f 2`);
+        echo $vmdk
+        if [[ $vmdk == *0000* ]] ; then
+            vmname=(`ssh root@$1 grep displayName $vm | cut -d \" -f 2`)
+            vmnames=$vmnames$vmname","
+        fi
+    fi
+
+done
+
+#IFS=""
+if [ ${#vmnames} -gt 0 ] ; then
+    vmnames="${vmnames%?}"
+    echo "CRITICAL - $vmnames running on orphaned snapshots"
+    exit 2
+fi
+
+
+echo "OK"
+exit 0

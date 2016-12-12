@@ -34,12 +34,12 @@ $TIMEOUT = 15;
 sub print_revision ($$) {
 	my $commandName = shift;
 	my $pluginRevision = shift;
-	print "$commandName v$pluginRevision (nagios-plugins 1.4.16)\n";
+	print "$commandName v$pluginRevision (nagios-plugins 2.0.3)\n";
 	print "The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n";
 }
 
 sub support () {
-	my $support='Send email to nagios-users@lists.sourceforge.net if you have questions\nregarding use of this software. To submit patches or suggest improvements,\nsend email to nagiosplug-devel@lists.sourceforge.net.\nPlease include version information with all correspondence (when possible,\nuse output from the --version option of the plugin itself).\n';
+	my $support='Send email to help@nagios-plugins.org if you have questions regarding use\nof this software. To submit patches or suggest improvements, send email to\ndevel@nagios-plugins.org. Please include version information with all\ncorrespondence (when possible, use output from the --version option of the\nplugin itself).\n';
 	$support =~ s/@/\@/g;
 	$support =~ s/\\n/\n/g;
 	print $support;
