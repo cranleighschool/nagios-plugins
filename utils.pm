@@ -17,6 +17,7 @@ sub support();
 sub is_hostname;
 
 ## updated by autoconf
+$PATH_TO_SUDO    = "";
 $PATH_TO_RPCINFO = "/usr/sbin/rpcinfo" ;
 $PATH_TO_LMSTAT  = "" ;
 $PATH_TO_SMBCLIENT = "/usr/bin/smbclient" ;
@@ -34,7 +35,7 @@ $TIMEOUT = 15;
 sub print_revision ($$) {
 	my $commandName = shift;
 	my $pluginRevision = shift;
-	print "$commandName v$pluginRevision (nagios-plugins 2.0.3)\n";
+	print "$commandName v$pluginRevision (nagios-plugins 2.1.4)\n";
 	print "The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n";
 }
 

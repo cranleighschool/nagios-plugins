@@ -1,4 +1,13 @@
 #!/bin/bash
+# Version 1.7.2 (Please check against: https://github.com/fredbradley/nagios-wordpress-updates-checker/blob/master/check_wp_update )
+#
+# The Nagios Check that works with https://github.com/fredbradley/nagios-wordpress-updates-checker/
+#
+# Please read the README.md at https://github.com/fredbradley/nagios-wordpress-updates-checker/
+#
+# Credit Nods: Inspired by check_wp_version by @hteske. Original here: http://exchange.nagios.org/directory/Plugins/CMS-and-Blog-Software/Wordpress/check_wp_version/details
+
+
 
 CURL=`which curl`
 CURL_OPTS='--user-agent check-wp-updates-nagios-plugin --insecure'
@@ -11,9 +20,16 @@ STATE_WARNING=1
 STATE_CRITICAL=2
 STATE_UNKNOWN=3
 
+function jsonValue
+{
+	KEY=$1
+	num=$2
+	awk -F"[,:}]" '{for(i=1;i<=NF;i++){if($i~/'$KEY'\042/){print $(i+1)}}}' | tr -d '"' | sed -n ${num}p
+}
+
 function print_usage
 {
-	echo "Usage: $PROGNAME <URL>" 
+	echo "Usage: $PROGNAME <URL>"
 }
 
 if [ ! $1 ]; then
@@ -21,17 +37,44 @@ if [ ! $1 ]; then
 	exit $STATE_CRITICAL
 fi
 
-result=`$CURL $CURL_OPTS -s $1`
+# Check that we're getting a 200 OK message for the file file on the remote host.
+response=`$CURL $CURL_OPTS -I $1`
+if [[ $response != *"200 OK"* ]]; then
+        echo 'CRITICAL - Checker Script not installed on remote host'
+        exit $STATE_CRITICAL
+fi
 
+# Find out if we are getting a JSON response or the legacy text (html) response
+if [[ $response == *"Content-Type: application/json"* ]]; then
+	RESPONSE_TYPE="JSON"
+else
+	RESPONSE_TYPE="TEXT"
+fi
+
+# Save CURL output to $result variable
+result=`$CURL $CURL_OPTS -s -X GET $1`
+
+# If there's no result, then perhaps CURL isn't installed?
 if [ $? != 0 ]; then
 	echo 'CRITICAL - Check plugin does not work. Maybe you need to install curl.'
 	exit $STATE_CRITICAL
 else
-	status=`echo $result | cut -d\# -f1`
-	text=`echo $result | cut -d\# -f2`
+	# Depending on the response type, then we get the content in a different way
+	case "$RESPONSE_TYPE" in
+		JSON)
+			status=`echo ${result[$x]} | jsonValue status 1`
+			text=`echo ${result[$x]} | jsonValue text 1`
+		;;
+		TEXT)
+			status=`echo $result | cut -d\# -f1`
+			text=`echo $result | cut -d\# -f2`
+		;;
+	esac
 
-	echo "WORDPRESS $status - $text"
-	
+	# Echo out the output
+	echo "$status - $text"
+
+	# Finish in a Nagios friendly way!
 	case "$status" in
 		CRITICAL)
 			exit $STATE_CRITICAL

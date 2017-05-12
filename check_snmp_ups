@@ -1,0 +1,267 @@
+#!/bin/bash
+
+# check_snmp_ups
+# Description : Check Uninterruptible Power Supply (UPS)
+# Version : 1.0
+# Author : Yoann LAMY
+# Licence : GPLv2
+
+# Commands
+CMD_BASENAME="/bin/basename"
+CMD_SNMPGET="/usr/bin/snmpget"
+CMD_SNMPWALK="/usr/bin/snmpwalk"
+CMD_BC="/usr/bin/bc"
+CMD_EXPR="/usr/bin/expr"
+
+# Script name
+SCRIPTNAME=`$CMD_BASENAME $0`
+
+# Version
+VERSION="1.0"
+
+# Plugin return codes
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+STATE_UNKNOWN=3
+
+# 'upsBatteryStatus', UPS-MIB
+OID_BATTERY_STATUS=".1.3.6.1.2.1.33.1.2.1.0"
+
+# 'upsEstimatedChargeRemaining', UPS-MIB
+OID_BATTERY_CHARGE=".1.3.6.1.2.1.33.1.2.4.0"
+
+# 'upsEstimatedMinutesRemaining', UPS-MIB
+OID_BATTERY_REMAINING=".1.3.6.1.2.1.33.1.2.3.0"
+
+# 'upsOutputSource', UPS-MIB
+OID_BATTERY_OUTPUTSOURCE=".1.3.6.1.2.1.33.1.4.1.0"
+
+# 'upsOutputPower', UPS-MIB
+OID_BATTERY_OUTPUTPOWER=".1.3.6.1.2.1.33.1.4.4.1.4"
+
+# 'upsBatteryTemperature', UPS-MIB
+OID_BATTERY_TEMPERATURE=".1.3.6.1.2.1.33.1.2.7.0"
+
+# Default variables
+DESCRIPTION="Unknown"
+STATE=$STATE_UNKNOWN
+OUTPUTPOWER=0
+
+# Default options
+COMMUNITY="public"
+HOSTNAME="127.0.0.1"
+TYPE="battery"
+WARNING=0
+CRITICAL=0
+
+# Option processing
+print_usage() {
+  echo "Usage: ./check_snmp_ups -H 127.0.0.1 -C public -t battery"
+  echo "  $SCRIPTNAME -H ADDRESS"
+  echo "  $SCRIPTNAME -C STRING"
+  echo "  $SCRIPTNAME -t STRING"
+  echo "  $SCRIPTNAME -w INTEGER"
+  echo "  $SCRIPTNAME -c INTEGER"
+  echo "  $SCRIPTNAME -h"
+  echo "  $SCRIPTNAME -V"
+}
+
+print_version() {
+  echo $SCRIPTNAME version $VERSION
+  echo ""
+  echo "This nagios plugins comes with ABSOLUTELY NO WARRANTY."
+  echo "You may redistribute copies of the plugins under the terms of the GNU General Public License v2."
+}
+
+print_help() {
+  print_version
+  echo ""
+  print_usage
+  echo ""
+  echo "Check Uninterruptible power supply (UPS)"
+  echo ""
+  echo "-H ADDRESS"
+  echo "   Name or IP address of host (default: 127.0.0.1)"
+  echo "-C STRING"
+  echo "   Community name for the host's SNMP agent (default: public)"
+  echo "-t STRING"
+  echo "   Different status (battery, charge, power, source, temperature) (default: battery)"
+  echo "-w INTEGER"
+  echo "   Warning battery level in percent and UPS Warning temperature level in degres celsius (default: 0)"
+  echo "-c INTEGER"
+  echo "   Critical battery level in percent and UPS Critical temperature level in degres celsius (default: 0)"
+  echo "-h"
+  echo "   Print this help screen"
+  echo "-V"
+  echo "   Print version and license information"
+  echo ""
+  echo ""
+  echo "This plugin uses the 'snmpget' command included with the NET-SNMP package."
+}
+
+while getopts H:C:t:w:c:hV OPT
+do
+  case $OPT in
+    H) HOSTNAME="$OPTARG" ;;
+    C) COMMUNITY="$OPTARG" ;;
+    t) TYPE="$OPTARG" ;;
+    w) WARNING="$OPTARG" ;;
+    c) CRITICAL="$OPTARG" ;;
+    h)
+      print_help
+      exit $STATE_UNKNOWN
+      ;;
+    V)
+      print_version
+      exit $STATE_UNKNOWN
+      ;;
+   esac
+done
+
+# Plugin processing
+size_convert() {
+  if [ $VALUE -ge 1000 ]; then
+    VALUE=`echo "scale=2 ; $VALUE / 1000" | $CMD_BC`
+    VALUE="$VALUE KWatt"
+  else
+    VALUE="$VALUE Watt"
+  fi
+}
+
+if [ $TYPE = "battery" ]; then
+  # Check battery status (Usage: ./check_snmp_ups -H 127.0.0.1 -C public -t battery)
+  BATTERY=`$CMD_SNMPGET -t 2 -r 2 -v 1 -c $COMMUNITY -Ovq $HOSTNAME $OID_BATTERY_STATUS`
+  DESCRIPTION="Battery status : "
+  case $BATTERY in
+    1)
+      DESCRIPTION="$DESCRIPTION Unknown"
+      STATE=$STATE_UNKNOWN
+      ;;
+    2)
+      DESCRIPTION="$DESCRIPTION Battery level is ok"
+      STATE=$STATE_OK
+      ;;
+    3)
+      DESCRIPTION="$DESCRIPTION Low battery level"
+      STATE=$STATE_WARNING
+      ;;
+    4)
+      DESCRIPTION="$DESCRIPTION UPS Battery is Discharged"
+      STATE=$STATE_CRITICAL
+      ;;
+    *)
+      DESCRIPTION="$DESCRIPTION Unknown"
+      STATE=$STATE_UNKNOWN
+      ;;
+  esac
+elif [ $TYPE = "charge" ]; then
+  # Check battery charge (Usage: ./check_snmp_ups -H 127.0.0.1 -C public -t charge -w 60 -c 30)
+  CHARGE=`$CMD_SNMPGET -t 2 -r 2 -v 1 -c $COMMUNITY -Ovq $HOSTNAME $OID_BATTERY_CHARGE`
+
+  if [ -n "$CHARGE" ]; then
+    CHARGE_REMAINING=`$CMD_SNMPGET -t 2 -r 2 -v 1 -c $COMMUNITY -Ovq $HOSTNAME $OID_BATTERY_REMAINING`
+    if [ $WARNING != 0 ] || [ $CRITICAL != 0 ]; then
+      if [ $CHARGE -lt $CRITICAL ] && [ $CRITICAL != 0 ]; then
+        STATE=$STATE_CRITICAL
+      elif [ $CHARGE -lt $WARNING ] && [ $WARNING != 0 ]; then
+        STATE=$STATE_WARNING
+      else
+        STATE=$STATE_OK
+      fi
+    else
+      STATE=$STATE_OK
+    fi
+    DESCRIPTION="Battery level : ${CHARGE}%. Remaining time : ${CHARGE_REMAINING} minutes | charge=$CHARGE;$WARNING;$CRITICAL;0"
+  fi
+elif [ $TYPE = "power" ]; then
+  # Check output power (Usage: ./check_snmp_ups -H 127.0.0.1 -C public -t power -w 40000 -c 50000)
+  for NUMBER in `$CMD_SNMPWALK -t 2 -r 2 -v 1 -c $COMMUNITY -Ovq $HOSTNAME $OID_BATTERY_OUTPUTPOWER`
+  do
+    if [ -n "$NUMBER" ]; then
+      OUTPUTPOWER=`$CMD_EXPR $OUTPUTPOWER + $NUMBER`
+    fi
+  done
+
+  if [ $WARNING != 0 ] || [ $CRITICAL != 0 ]; then
+    if [ $OUTPUTPOWER -lt $CRITICAL ] && [ $CRITICAL != 0 ]; then
+      STATE=$STATE_CRITICAL
+    elif [ $OUTPUTPOWER -lt $WARNING ] && [ $WARNING != 0 ]; then
+      STATE=$STATE_WARNING
+    else
+      STATE=$STATE_OK
+    fi
+  else
+    if [ $OUTPUTPOWER != 0 ]; then
+      STATE=$STATE_OK
+    else
+      STATE=$STATE_UNKNOWN
+    fi
+  fi
+
+  VALUE=$OUTPUTPOWER
+  size_convert
+  OUTPUTPOWER_FORMAT=$VALUE
+
+  DESCRIPTION="Output power : $OUTPUTPOWER_FORMAT | output_power=$OUTPUTPOWER;$WARNING;$CRITICAL;0"
+elif [ $TYPE = "source" ]; then
+  # Check output source (Usage: ./check_snmp_ups -H 127.0.0.1 -C public -t source)
+  SOURCE=`$CMD_SNMPGET -t 2 -r 2 -v 1 -c $COMMUNITY -Ovq $HOSTNAME $OID_BATTERY_OUTPUTSOURCE`
+  DESCRIPTION="Output source : "
+  case $SOURCE in
+    1)
+      DESCRIPTION="$DESCRIPTION Unknown"
+      STATE=$STATE_UNKNOWN
+      ;;
+    2)
+      DESCRIPTION="$DESCRIPTION UPS circuit breaker is tripped"
+      STATE=$STATE_CRITICAL
+      ;;
+    3)
+      DESCRIPTION="$DESCRIPTION Output is filtered"
+      STATE=$STATE_OK
+      ;;
+    4)
+      DESCRIPTION="$DESCRIPTION UPS is in bypass mode"
+      STATE=$STATE_CRITICAL
+      ;;
+    5)
+      DESCRIPTION="$DESCRIPTION Power loss. UPS is in backup mode"
+      STATE=$STATE_CRITICAL
+      ;;
+    6)
+      DESCRIPTION="$DESCRIPTION Voltage regulator mode (booster)"
+      STATE=$STATE_WARNING
+      ;;
+    7)
+      DESCRIPTION="$DESCRIPTION Voltage regulator mode (reducer)"
+      STATE=$STATE_WARNING
+      ;;
+    *)
+      DESCRIPTION="$DESCRIPTION Unknown"
+      STATE=$STATE_UNKNOWN
+      ;;
+  esac
+elif [ $TYPE = "temperature" ]; then
+  # Check temperature (Usage: ./check_snmp_ups -H 127.0.0.1 -C public -t temperature -w 25 -c 30)
+  TEMPERATURE=`$CMD_SNMPGET -t 2 -r 2 -v 1 -c $COMMUNITY -Ovq $HOSTNAME $OID_BATTERY_TEMPERATURE`
+
+  if [ -n "$TEMPERATURE" ]; then
+    if [ $WARNING != 0 ] || [ $CRITICAL != 0 ]; then
+      if [ $TEMPERATURE -gt $CRITICAL ] && [ $CRITICAL != 0 ]; then
+        STATE=$STATE_CRITICAL
+      elif [ $TEMPERATURE -gt $WARNING ] && [ $WARNING != 0 ]; then
+        STATE=$STATE_WARNING
+      else
+        STATE=$STATE_OK
+      fi
+    else
+      STATE=$STATE_OK
+    fi
+    DESCRIPTION="Temperature : $TEMPERATURE Degree Celsius | temperature=$TEMPERATURE;$WARNING;$CRITICAL;0"
+  fi
+
+fi
+
+echo $DESCRIPTION
+exit $STATE

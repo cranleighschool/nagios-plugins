@@ -1,10 +1,12 @@
-#! /usr/bin/perl -wT
+#!/usr/bin/perl -w
 
 
 use strict;
 use Getopt::Long;
 use vars qw($opt_V $opt_h $opt_w $opt_c $opt_H $opt_C $PROGNAME);
-use lib "/usr/lib64/nagios/plugins" ;
+use FindBin;
+use lib "$FindBin::Bin";
+use lib '/usr/lib64/nagios/plugins';
 use utils qw(%ERRORS &print_revision &support &usage);
 
 $PROGNAME = "check_breeze";
@@ -12,7 +14,7 @@ $PROGNAME = "check_breeze";
 sub print_help ();
 sub print_usage ();
 
-$ENV{'PATH'}='';
+$ENV{'PATH'}='/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin';
 $ENV{'BASH_ENV'}=''; 
 $ENV{'ENV'}='';
 
@@ -26,7 +28,7 @@ GetOptions
 	 "C=s" => \$opt_C, "community=s" => \$opt_C);
 
 if ($opt_V) {
-	print_revision($PROGNAME,'2.0.3');
+	print_revision($PROGNAME,'2.1.4');
 	exit $ERRORS{'OK'};
 }
 
@@ -65,7 +67,7 @@ sub print_usage () {
 }
 
 sub print_help () {
-	print_revision($PROGNAME,'2.0.3');
+	print_revision($PROGNAME,'2.1.4');
 	print "Copyright (c) 2000 Jeffrey Blank/Karl DeBisschop
 
 This plugin reports the signal strength of a Breezecom wireless equipment

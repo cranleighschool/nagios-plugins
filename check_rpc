@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#!/usr/bin/perl -w
 #
 # check_rpc plugin for nagios
 #
@@ -20,7 +20,9 @@
 #
 
 use strict;
-use lib "/usr/lib64/nagios/plugins";
+use FindBin;
+use lib "$FindBin::Bin";
+use lib '/usr/lib64/nagios/plugins';
 use utils qw($TIMEOUT %ERRORS &print_revision &support);
 use vars qw($PROGNAME);
 my ($verbose,@proto,%prognum,$host,$response,$prognum,$port,$cmd,$progver,$state);
@@ -36,9 +38,9 @@ sub print_help ();
 sub print_usage ();
 sub in ($$);
 
-$ENV{'BASH_ENV'}='';
+$ENV{'PATH'}='/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin';
+$ENV{'BASH_ENV'}=''; 
 $ENV{'ENV'}='';
-$ENV{'PATH'}='';
 $ENV{'LC_ALL'}='C';
 
 #Initialise protocol for each progname number
@@ -66,7 +68,7 @@ if ($opt_h) { print_help(); exit $ERRORS{'OK'}; }
 
 # -V means display version number
 if ($opt_V) {
-	print_revision($PROGNAME,'2.0.3');
+	print_revision($PROGNAME,'2.1.4');
 	exit $ERRORS{'OK'};
 }
 
@@ -334,7 +336,7 @@ sub get_rpcinfo {
 
 
 sub print_help() {
-	print_revision($PROGNAME,'2.0.3');
+	print_revision($PROGNAME,'2.1.4');
 	print "Copyright (c) 2002 Karl DeBisschop/Truongchinh Nguyen/Subhendu Ghosh\n";
 	print "\n";
 	print "Check if a rpc service is registered and running using\n";

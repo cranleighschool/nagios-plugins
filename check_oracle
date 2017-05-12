@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 #
 # latigid010@yahoo.com
 # 01/06/2000
@@ -6,9 +6,12 @@
 #  This Nagios plugin was created to check Oracle status
 #
 
+PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+export PATH
 PROGNAME=`basename $0`
 PROGPATH=`echo $0 | sed -e 's,[\\/][^\\/][^\\/]*$,,'`
-REVISION="2.0.3"
+REVISION="2.1.4"
+PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 
 . $PROGPATH/utils.sh
 

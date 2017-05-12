@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#!@PERL@ -w
 #
 # (c)1999 Ian Cass, Knowledge Matters Ltd.
 # Read the GNU copyright stuff for all the legalese
@@ -61,7 +61,8 @@ use POSIX;
 use strict;
 use Getopt::Long;
 use vars qw($opt_V $opt_h $opt_H $opt_t $opt_w $opt_c $opt_O $opt_j $opt_k $verbose $PROGNAME $def_jitter $ipv4 $ipv6);
-use lib "/usr/lib64/nagios/plugins";
+use FindBin;
+use lib "$FindBin::Bin";
 use utils qw($TIMEOUT %ERRORS &print_revision &support);
 
 $PROGNAME="check_ntp";
@@ -69,7 +70,7 @@ $PROGNAME="check_ntp";
 sub print_help ();
 sub print_usage ();
 
-$ENV{'PATH'}='';
+$ENV{'PATH'}='@TRUSTED_PATH@';
 $ENV{'BASH_ENV'}='';
 $ENV{'ENV'}='';
 
@@ -96,7 +97,7 @@ GetOptions
 	 "H=s" => \$opt_H, "hostname=s" => \$opt_H);
 
 if ($opt_V) {
-	print_revision($PROGNAME,'');
+	print_revision($PROGNAME,'@NP_VERSION@');
 	exit $ERRORS{'OK'};
 }
 
@@ -441,7 +442,7 @@ sub print_usage () {
 }
 
 sub print_help () {
-	print_revision($PROGNAME,'');
+	print_revision($PROGNAME,'@NP_VERSION@');
 	print "Copyright (c) 2003 Bo Kersey/Karl DeBisschop\n";
 	print "\n";
 	print_usage();

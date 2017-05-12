@@ -7,7 +7,7 @@ STATE_UNKNOWN=3
 STATE_DEPENDENT=4
 
 print_revision() {
-	echo "$1 v$2 (nagios-plugins 2.0.3)"
+	echo "$1 v$2 (nagios-plugins 2.1.4)"
 	printf '%b' "The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n"
 }
 
