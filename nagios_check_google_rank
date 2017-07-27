@@ -1,0 +1,43 @@
+#! /usr/bin/perl
+# Copyright 2007 by <christian@queinnec.org>
+# Distributed under the terms of the Perl Artistic License
+#  See http://www.perl.com/pub/a/language/misc/Artistic.html
+
+use strict;
+
+use Nagios::Plugin;
+use Nagios::Plugin::Getopt;
+use WWW::Google::PageRank;
+
+my $np = Nagios::Plugin->new( shortname => 'PAGERANK_VALIDATION');
+my $ng = Nagios::Plugin::Getopt->new(
+        usage => "Usage: %s --url <websiteUrl> -c <critical>",
+        version => '$Revision: 1.3 $',
+        blurb => 'Check whether the Google page rank of a website is still good'
+);
+$ng->arg(
+         spec => 'critical|c=i',
+         help => "Exit with CRITICAL status if page rank is less",
+         required => 1,
+);
+$ng->arg(
+         spec => 'url=s',
+         help => "--url <websiteUrl>\n   The URL of the website to check",
+         required => 1,
+);
+$ng->getopts;
+
+my $pr = WWW::Google::PageRank->new;
+my $page_rank = scalar($pr->get($ng->url));
+if ($page_rank < $ng->critical) {
+    my $msg = "PageRank " . $page_rank . "<" . $ng->critical 
+        . " for " . $ng->url;
+    $np->nagios_die(CRITICAL, $msg);
+} else {
+    my $msg = "PageRank " . $page_rank .  ">=" . $ng->critical 
+        . " for " . $ng->url;
+    $np->nagios_exit(0, $msg);
+}
+
+# end of nagios_check_google_rank
+
