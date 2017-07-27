@@ -17,7 +17,8 @@ expiry_string = data[1].replace("Registry Expiry Date: ","")
 expiry_string = expiry_string.replace("Registrar Registration Expiration Date: ","")
 expiry_string = expiry_string.replace("        Expiry date:  ","")
 expiry_string = expiry_string.replace("Domain Expiration Date:                      ","")
-
+#print "UNKNOWN - "+expiry_string.strip()
+#exit(3)
 domain_type = args.domain.split('.',1)[-1]
 
 #print expiry_string
@@ -34,7 +35,7 @@ else:
    	expiry_string = expiry_string.split('T', 1)[0]
    else:
 	expiry_string = expiry_string.split(' ', 1)[0]
-   expiry_time = datetime.strptime(expiry_string,'%Y-%m-%d')
+   expiry_time = datetime.strptime(expiry_string.strip(),'%Y-%m-%d')
 
 now = datetime.now()
 
