@@ -24,7 +24,7 @@ domain_type = args.domain.split('.',1)[-1]
 #print expiry_string
 
 #remove trailing time
-if domain_type == 'co.uk' or domain_type=='org.uk':
+if domain_type == 'co.uk' or domain_type == 'uk' or domain_type=='org.uk':
    expiry_time = datetime.strptime(expiry_string.strip(),'%d-%b-%Y')
 elif domain_type == 'biz':
    expiry_string = expiry_string.split(" ")
