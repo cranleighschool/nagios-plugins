@@ -13,19 +13,29 @@ $url = preg_replace('/\s*/','',$url);
 $bla = file_get_contents($url);
 
 $obj = json_decode($bla);
-$then = strtotime($obj->last_update);
+
+if (!isset($obj->lastUpdated)) {
+	print "Object Not found";
+	exit(2);
+}
+
+$then = strtotime($obj->lastUpdated);
 $now = time();
-print "Rsync last run: $obj->last_update ";
 
 if ($then > strtotime('-12 hours')) {
-        print "OK";
+	print "RSYNC last run: $obj->lastUpdated";
         exit(0);
 }
+
 if ($then > strtotime('-24 hours') && $then < strtotime('-12 hours')) {
-        print "WARNING";
+        print "WARNING - Rsync not run in the last 12 hours";
         exit(1);
 }
+
 if ($then < $now && $then > strtotime('-24 hours')) {
-        print "ERROR";
+        print "ERROR - Rsync not run int he last 24 hours";
         exit(2);
 }
+
+print "ERROR - Reached End of File";
+exit(3);
