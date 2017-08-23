@@ -1,5 +1,5 @@
 #!/bin/bash
-# Version 1.7.2 (Please check against: https://github.com/fredbradley/nagios-wordpress-updates-checker/blob/master/check_wp_update )
+# Version 1.9.2 (Please check against: https://github.com/fredbradley/nagios-wordpress-updates-checker/blob/master/check_wp_update )
 #
 # The Nagios Check that works with https://github.com/fredbradley/nagios-wordpress-updates-checker/
 #
@@ -10,7 +10,7 @@
 
 
 CURL=`which curl`
-CURL_OPTS='--user-agent check-wp-updates-nagios-plugin --insecure'
+CURL_OPTS='--user-agent check-wp-updates-nagios-plugin --insecure -L'
 BASENAME=`which basename`
 PROGNAME=`$BASENAME $0`
 
@@ -87,3 +87,4 @@ else
 			;;
 	esac
 fi
+
