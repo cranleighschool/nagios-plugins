@@ -10,9 +10,7 @@ $url = $argv[1];
 $url = preg_replace('/\s*/','',$url);
 
 
-$bla = file_get_contents($url);
-
-$obj = json_decode($bla);
+$obj = json_decode(curler($url));
 
 if (!isset($obj->lastUpdated)) {
 	print "Object Not found";
@@ -39,3 +37,16 @@ if ($then < $now && $then > strtotime('-24 hours')) {
 
 print "ERROR - Reached End of File";
 exit(3);
+
+function curler($url) {
+	$ch = curl_init();
+	$headers = array(
+		"User-Agent: nagios-check"
+	);
+	curl_setopt($ch, CURLOPT_URL, $url);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+	$result = curl_exec($ch);
+	curl_close($ch);
+	return $result;
+}
