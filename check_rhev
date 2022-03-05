@@ -1,0 +1,146 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2011
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+import sys
+import os
+import socket
+import paramiko
+
+from optparse import OptionParser
+
+# Exit statuses recognized by Nagios
+UNKNOWN   = -1
+OK        = 0
+WARNING   = 1
+CRITICAL  = 2
+
+###############
+# ATTENTION:  #
+###############
+# Add your rhev-h host below, like "192.168.1.101,192.168.1.102, ..."
+HOSTS	  = ""
+
+# General macros
+VDSM_PORT = 54321
+TIMEOUT_SOCKET_SEC = 5
+VERSION = "1.0.0"
+VDSM_COMMAND = "vdsClient"
+
+class checkRHEV:
+
+	##########################################################################
+        # __init__()                                                             #
+        # Description: Initialize method                                         #
+        ##########################################################################
+	def __init__(self):
+		pass
+
+	##########################################################################
+        # do_connect()                                                           #
+        # Description: Do a connection with vdsm daemon                          #
+        ##########################################################################
+        def do_connect(self, hosts):
+		i = 0
+		while(i < len(hosts)):
+			# Connection Validation
+			sk = socket.socket()
+			sk.settimeout(TIMEOUT_SOCKET_SEC)
+			try:
+				sk.connect((hosts[i], int(VDSM_PORT)))
+				print "OK: VDSM is UP @ %s" % hosts[i]
+				ret = OK
+			except Exception, e:
+				print "CRITICAL: Unable to connect VDSM HOST: %s" % hosts[i]
+				ret = CRITICAL
+				break
+			sk.close()
+			i += 1
+
+		return ret
+
+
+        ##########################################################################
+        # checkVMS()                                                             #
+        # Description: Check Guests        	   			         #
+        ##########################################################################
+	def checkVMS(self, hosts, user, passw, guest):
+		i = 0
+		while(i < len(hosts)):
+			ssh = paramiko.SSHClient()
+			ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+			try:
+				ssh.connect(hosts[i],username=user,password=passw)
+				stdin, stdout, stderr = ssh.exec_command(VDSM_COMMAND + ' -s 0 list table')
+				data = stdout.readlines()
+				for line in data:
+					status = "Up"
+					if line.find(status) != -1 and line.find(guest) != -1:
+						print "OK: %s UP @ %s" % (guest, hosts[i])
+						sys.exit(OK) 
+				error = stderr.readlines()
+				for line in error:
+					status = "command not found"
+					if line.find(status) != -1:
+						print "error: please install vdsClient, host: %s" % hosts[i]
+			except Exception, e:
+				ssh.close()
+
+			ssh.close()
+			i += 1
+
+# MAIN
+if __name__ == "__main__":
+
+        usage = "usage: %prog [options] arg"
+        parser = OptionParser(usage)
+        parser.add_option("-v", "--verbose", action="store_true", dest="verbose")
+        parser.add_option("-q", "--quiet", action="store_false", dest="verbose")
+        parser.add_option("-t", "--type-service", action="store", dest="type_service")
+        parser.add_option("-g", "--guest", action="store", dest="guest")
+        parser.add_option("-u", "--user", action="store", dest="user")
+        parser.add_option("-p", "--password", action="store", dest="passw")
+        (options, args) = parser.parse_args()
+
+	if HOSTS == "":
+		print "UNKNOWN: please add your RHEV-H hosts into check_rhev!"
+		sys.exit(UNKNOWN)
+		
+	if options.type_service == None:
+		print "UNKNOWN: invalid option, please verify check_rhev -h"
+		sys.exit(UNKNOWN)
+
+	# Generic calls - every option will use them
+	rhev = checkRHEV()
+        hosts = HOSTS.split(",")
+
+	user  = options.user
+        passw = options.passw
+        guest = options.guest
+
+	# TODO: create All option	
+	#if options.type_service == 'All':
+	#	pass
+
+        if options.type_service == 'checkHOST':
+		ret = rhev.do_connect(hosts)
+		if ret != OK:
+			sys.exit(CRITICAL)
+
+		sys.exit(OK)
+
+        if options.type_service == 'checkVMS':
+                rhev.checkVMS(hosts, user, passw, guest)
+                sys.exit(CRITICAL)
+	else:
+		print "UNKNOWN: invalid option, please verify check_rhev -h"
+		sys.exit(UNKNOWN)

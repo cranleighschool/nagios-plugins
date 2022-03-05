@@ -1,0 +1,104 @@
+#!/bin/bash
+# Author Stefan Nonchev
+# Nagios script for checking the number of existing snapshots and how old are these.
+# The script should work with any ESXi 5.x
+# Installation notes:
+# On your nagios server execute:
+#
+# #sudo nagios
+# #ssh-keygen
+# copy the public certificate into /etc/ssh/keys-root/authorized_keys on each ESXi host that will be monitored
+
+print_usage() {
+        echo ""
+        echo "Usage: $0 [esxi_hostname] [warn] [crit] [snapage]"
+        echo "where [warn] and [crit] are the allowed numbers of snapshots and [snapage] is how old a snapshot is allowed to be"
+        echo ""
+        exit 3
+}
+
+case "$1" in
+        --help)
+                print_usage
+                ;;
+        -h)
+                print_usage
+                ;;
+esac
+
+if [ "$#" -ne "4" ]; then
+        print_usage
+fi
+
+function date2stamp () {
+    date --utc --date "$1" +%s
+}
+
+function dateDiff () {
+    sec=86400
+    dte1=$(date2stamp $1)
+    dte2=$(date2stamp $2)
+    diffSec=$((dte2-dte1))
+    if ((diffSec < 0)); then abs=-1; else abs=1; fi
+    echo $((diffSec/sec*abs))
+}
+
+i=0
+total=0
+dateNow=(`date '+%Y-%m-%d'`);
+IFS="
+"
+
+# Getting VM IDs and names with vim-cmd
+vmstr=''
+#Added -i switch to specify which key to use - JY 30/03/16
+vms=(`ssh -i /home/nagios/.ssh/id_rsa root@$1 vim-cmd vmsvc/getallvms | sed -e '1d' -e 's/ \[.*$//' | awk '$1 ~ /^[0-9]+$/ {print  $1":"substr($0,8,80)}'`);
+for vm in "${vms[@]}"; do
+    id=`echo $vm | awk -F: '{print $1}'`
+    #reformatting the sting
+    vmname=`echo $vm | awk -F: '{print $2}' | sed 's/ *$//'`
+    #Added -i switch to specify which key to use - JY 30/03/16
+    result=`ssh -i /home/nagios/.ssh/id_rsa root@$1 vim-cmd vmsvc/snapshot.get $id | grep "Snapshot Name" | wc -l`
+    if [ $result -ge 1 ]; then
+        # we are getting only the oldest snapshot
+	#Added -i switch to specify which key to use - JY 30/03/16
+        dateCreated=`ssh -i /home/nagios/.ssh/id_rsa root@$1 vim-cmd vmsvc/snapshot.get $id | grep "Created On" | awk '{print $5}' | awk -F/ '{print $3"-"$1"-"$2}' | head -1`
+        dateSnap=$(dateDiff $dateCreated $dateNow)
+        if [ $dateSnap -le $3 ] ; then
+            dateStatus=0
+        elif [ $dateSnap -gt $3 ] ; then
+            dateStatus=1
+        fi
+        vmstr=$vmstr$vmname"-"$dateSnap" days,"
+        vmnames=$vmnames$vmname","
+        let "total=$total+$result";
+        let i++;
+    fi
+done
+
+if [ ${#vmstr} -gt 0 ] ; then
+    vmstr="${vmstr%?}"
+fi
+if [ ${#vmnames} -gt 0 ] ; then
+    vmnames="${vmnames%?}"
+fi
+
+#IFS=""
+if [ $total -eq 0 ] ; then
+    echo "OK - $total snapshots found"
+    exit 0
+fi
+if [ $total -le $2 ] ; then
+    if [ $dateStatus -eq 0 ] ; then
+           echo "WARNING - $total snapshots, oldest is below 3 days, VMs: $vmnames"
+           exit 1
+    elif [ $dateStatus -eq 1 ] ; then
+           echo "CRITICAL - very old snapshots on: $vmstr"
+           exit 2
+    fi
+fi
+
+if [ $total -gt $2 ] ; then
+    echo "CRITICAL - $total snapshots found on $vmnames"
+    exit 2
+fi
