@@ -1,0 +1,36 @@
+#!/bin/bash
+
+hureadable=$(sudo /usr/bin/du -sh /var/lib/mysql/seniorschool/ | awk '{print $1}' | sed 's/.$//')
+bytes=$(sudo /usr/bin/du -s /var/lib/mysql/seniorschool | awk '{print $1}')
+
+echo $(echo "scale=2; ${bytes}/1000000000"  | bc -l)
+#echo $(((${bytes}/1024/1024)))
+#gb=$[ $bytes/1024/1024 ];
+#echo $gb
+exit
+if [ $var > 1.1 ];
+then
+	echo "CRITICAL: DB Size is $var GB"
+	exit 2
+fi
+if [ $var > 0.8 ];
+then
+	echo "WARNING: DB Size is $var GB"
+	exit 1
+fi
+
+if [ $var < 0.9 && $var > 0.6 ];
+then
+	echo "OK: DB Size if $var GB"
+	exit 0
+fi
+
+if [ $var < 0.6 ];
+then
+	echo "CRITICAL: DB SIZE SEEMS TOO LOW"
+	exit 2
+fi
+
+echo "UNKNOWN: IF STATEMENTS EXHAUSTED"
+exit 3
+
