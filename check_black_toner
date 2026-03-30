@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+#01-26-2009, Henry Franco
+#
+# This plugin will check the black toner level on a printer via SNMP.
+# The plugin returns warning and critical status when the toner
+# drops below $CRIT AND $WARN.
+
+
+if [ $# -lt 1 ]; then
+echo "Usage: ./check_toner PRINTER_NAME"
+exit 127
+fi
+
+HOST=$1
+INK="Toner available:"
+NAGIOSPLUGSDIR=/usr/lib64/nagios/plugins
+CRIT=1
+WARN=1
+STATUS=0
+
+# GET THE MAXIMUN CAPACITY VALUE FROM SNMP
+# YOU WILL GET THE SAME VALUE RUNNING snmpwalk -O n -v 2c -c public $HOST mib-2.43.11.1.1.8.1.1
+max_level=`$NAGIOSPLUGSDIR/check_snmp -H $HOST -C public -o mib-2.43.11.1.1.8.1.1`
+RES=$?
+
+# GET CURRENT SUPPLY LEVEL FROM SNMP
+# YOU WILL GET THE SAME VALUE RUNNING snmpwalk -O n -v 2c -c public $HOST mib-2.43.11.1.1.9.1.1
+current_level=`$NAGIOSPLUGSDIR/check_snmp -H $HOST -C public -o mib-2.43.11.1.1.9.1.1`
+RES=$?
+
+#BAIL OUT IF ANYTHING WENT WRONG
+if [ $RES != 0 ]; then
+INK="Toner Unknown - SNMP problem. No data received from host.";
+echo $INK;
+STATUS=3;
+exit $STATUS;
+fi
+
+#EXTRACT VALUES FROM CHECK_SNMP COMMANDS
+new_max_level=`echo $max_level|cut -d ' ' -f4`
+new_current_level=`echo $current_level|cut -d ' ' -f4`
+result=$(echo "scale=2; $new_current_level / $new_max_level;" | bc)
+
+#ACTUAL VALUE OF TONER SUPPLY
+percent=`echo "$result"*"100"/"1"|bc`
+
+
+#CHECK WARNING AND CRITICAL LEVELS
+if [ $percent -le $CRIT ]; then
+echo "Toner Critical - "$INK $percent"%";
+STATUS=2
+elif [ $percent -le $WARN ]; then
+echo "Toner Warning - "$INK $percent"%";
+STATUS=1
+else
+echo "Toner OK - "$INK $percent"%";
+fi
+
+
+exit $STATUS
