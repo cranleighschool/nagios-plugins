@@ -1,0 +1,15 @@
+#!/bin/bash
+# Returns count of available updates
+
+UPDATES=$(dnf check-update --quiet 2>/dev/null | grep -c '^[a-zA-Z0-9]')
+
+if [ "$UPDATES" -eq 0 ]; then
+    echo "OK: No updates available"
+    exit 0
+elif [ "$UPDATES" -lt 10 ]; then
+    echo "WARNING: $UPDATES update(s) available"
+    exit 1
+else
+    echo "CRITICAL: $UPDATES update(s) available"
+    exit 2
+fi
